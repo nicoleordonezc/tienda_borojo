@@ -127,3 +127,89 @@ const vs = db.system.js.findOne({_id:"vs"});
 const verificarStock = new Function("return " + vs.value.code)();
 const borojoFresco = db.productos.findOne({_id:1});
 verificarStock(borojoFresco, 20)
+
+//TRANSACCIONES
+
+//1. Simular una venta: a. Descontar del stock del producto, b. Insertar la venta en la colección `ventas`
+
+const session = db.getMongo().startSession();
+const dbSession = session.getDatabase("tienda_borojo");
+session.startTransaction();
+
+try {
+    dbSession.ventas.insertOne({
+         "_id": 11, "clienteId": 11, "productos": [{ "productoId": 1, "cantidad": 2 }], "fecha": ISODate("2025-06-22"), "total": 10000 
+    });
+    dbSession.productos.updateOne({_id:1},{$inc:{stock:-2}})
+    session.commitTransaction();
+    print("Venta confirmada")
+} catch (error) {
+    session.abortTransaction();
+    print("Error:", error)
+}finally{
+    session.endSession();
+}print("Fin del script")
+
+//2. Simular la entrada de nuevo inventario: a. Insertar un documento en `inventario`, b. Aumentar el stock del producto correspondiente
+
+const session = db.getMongo().startSession();
+const dbSession = session.getDatabase("tienda_borojo");
+session.startTransaction();
+
+try {
+    dbSession.inventario.insertOne({
+    
+  "_id": 11,
+  "productoId": 1,
+  "lote": "L011",
+  "cantidad": 80,
+  "entrada": new Date("2025-06-22")
+    });
+    dbSession.productos.updateOne({_id:1},{$inc:{stock:80}})
+    session.commitTransaction();
+    print("Inventario confirmado")
+} catch (error) {
+    session.abortTransaction();
+    print("Error:", error)
+}finally{
+    session.endSession();
+}print("Fin del script")
+    
+//3. Hacer una operación de devolución: a. Aumentar el stock, b. Eliminar la venta correspondiente
+
+const session = db.getMongo().startSession();
+const dbSession = session.getDatabase("tienda_borojo");
+session.startTransaction();
+
+try {
+    dbSession.ventas.deleteOne({_id: 11 });
+    dbSession.productos.updateOne({_id:1},{$inc:{stock:2}})
+    session.commitTransaction();
+    print("Devolución confirmada")
+} catch (error) {
+    session.abortTransaction();
+    print("Error:", error)
+}finally{
+    session.endSession();
+}print("Fin del script")
+
+//IINDEXACIÓN
+
+//1. Crear un índice en el campo `nombre` de `productos` para mejorar búsquedas por nombre.
+
+db.productos.createIndex({nombre:1});
+db.productos.find({nombre:"Jugo de borojó"})
+
+//2. Crear un índice compuesto sobre `categoria` y `precio` para facilitar búsquedas filtradas por ambas condiciones.
+
+db.productos.createIndex({categoria:1, precio:1});
+db.productos.find({categoria:"Fruta", precio:{$lte:5000}})
+
+//3. Crear un índice en el campo `email` de `clientes` para validaciones rápidas de duplicados.
+
+db.clientes.createIndex({email:1});
+db.clientes.find({email:{$regex:"email"}})
+
+//4. Usar `explain()` en una consulta para mostrar si el índice de `nombre` está siendo utiliza
+
+db.productos.find({nombre:"Jugo de borojó"}).explain("executionStats")
